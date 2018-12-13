@@ -459,38 +459,3 @@ gamestrain = test[(test['Release_Date'].dt.year > 2017)]
 reg_all = LinearRegression()
 reg_all.fit(gamestest, gamestrain)
 reg_all.predict(gamestest)
-
-
-
-
-
-
-
-
-
-
-
-
-# ~~~~~~~~~~~Questions~~~~~~~~~~~~
-
-
-# Help with subplotting (333)
-
-# sns in jupyter
-
-# Errors about "value trying to be set on a copy of slice" mute? (setting year values for erroneous entries) (~100)
-
-# Top dev (~430) why does it not cut off after top 10, tries to graph all entries?
-
-# for a regression fit, does everything have to be a numerical value? (genre, platform, etc)?
-
-
-
-
-
-
-
-# what to predict: Sales of a game, time series prediction
-
-# linear regression, tree based, polynomials on time variables (year * action in genre),
-# remove game name for modelleing (lasso, gbm, random forrest)
