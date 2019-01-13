@@ -7,7 +7,12 @@ import matplotlib as mpl
 from collections import Counter
 from scipy import stats
 #from plotnine import *
-import sklearn
+from sklearn.linear_model import LinearRegression
+import statsmodels.api as sm
+import statsmodels.stats.weightstats
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.ensemble import RandomForestRegressor
+
 
 pd.set_option('display.expand_frame_repr', False) #expands columns in pandas removing truncation
 
@@ -21,7 +26,7 @@ df = df[['Name', 'Platform', 'Genre', 'Publisher', 'Developer', 'Global_Sales', 
 ign = pd.read_csv(r'C:\Users\jason\Desktop\ign.csv')
 ign = ign[['title', 'platform', 'score', 'editors_choice', 'release_year', 'release_month', 'release_day']]
 
-# Rename date columns to capitol for consistency
+# Rename date columns to capital for consistency
 ign.rename(columns={'release_year': 'Release_Year', 'release_month': 'Release_Month', 'release_day': 'Release_Day'},
            inplace=True)
 
@@ -98,25 +103,24 @@ games = games[games['Release_Date'].dt.year >= 1980]
 
 # Fixing titles discovered incorrect dates
 # check on "A value is trying to be set on a copy of a slice"
-games.Release_Date[21278] = games.Release_Date[21278].replace(2003)
-games.Release_Date[2232] = games.Release_Date[2232].replace(2010)
-games.Release_Date[11572] = games.Release_Date[11572].replace(2007)
-games.Release_Date[17935] = games.Release_Date[17935].replace(2008)
-games.Release_Date[25883] = games.Release_Date[25883].replace(2009)
-games.Release_Date[15941] = games.Release_Date[15941].replace(2006)
-games.Release_Date[22295] = games.Release_Date[22295].replace(2007)
-games.Release_Date[1005] = games.Release_Date[1005].replace(2012)
-games.Release_Date[1751] = games.Release_Date[1751].replace(2009)
-games.Release_Date[10413] = games.Release_Date[10413].replace(2013)
-games.Release_Date[19837] = games.Release_Date[19837].replace(2006)
-games.Release_Date[21229] = games.Release_Date[21229].replace(2011)
-games.Release_Date[21763] = games.Release_Date[21763].replace(2011)
-games.Release_Date[2012] = games.Release_Date[2012].replace(2011)
-games.Release_Date[11368] = games.Release_Date[11368].replace(2014)
-games.Release_Date[5363] = games.Release_Date[5363].replace(2000)
-games.Release_Date[6033] = games.Release_Date[6033].replace(2001)
-
-
+games.loc[[21278], 'Release_Date'] = games.loc[21278, 'Release_Date'].replace(2003)
+games.loc[[2232], 'Release_Date'] = games.loc[2232, 'Release_Date'].replace(2010)
+games.loc[[11572], 'Release_Date'] = games.loc[11572, 'Release_Date'].replace(2007)
+games.loc[[17935], 'Release_Date'] = games.loc[17935, 'Release_Date'].replace(2008)
+games.loc[[25883], 'Release_Date'] = games.loc[25883, 'Release_Date'].replace(2009)
+games.loc[[15941], 'Release_Date'] = games.loc[15941, 'Release_Date'].replace(2006)
+games.loc[[22295], 'Release_Date'] = games.loc[22295, 'Release_Date'].replace(2007)
+games.loc[[1005], 'Release_Date'] = games.loc[1005, 'Release_Date'].replace(2012)
+games.loc[[1751], 'Release_Date'] = games.loc[1751, 'Release_Date'].replace(2009)
+games.loc[[10413], 'Release_Date'] = games.loc[10413, 'Release_Date'].replace(2013)
+games.loc[[19837], 'Release_Date'] = games.loc[19837, 'Release_Date'].replace(2006)
+games.loc[[21229], 'Release_Date'] = games.loc[21229, 'Release_Date'].replace(2011)
+games.loc[[21763], 'Release_Date'] = games.loc[21763, 'Release_Date'].replace(2011)
+games.loc[[2012], 'Release_Date'] = games.loc[2012, 'Release_Date'].replace(2011)
+games.loc[[11368], 'Release_Date'] = games.loc[11368, 'Release_Date'].replace(2014)
+games.loc[[5363], 'Release_Date'] = games.loc[5363, 'Release_Date'].replace(2000)
+games.loc[[6033], 'Release_Date'] = games.loc[6033, 'Release_Date'].replace(2001)
+games.loc[[6033], 'Release_Date'] = games.loc[6033, 'Release_Date'].replace(2001)
 
 
 
@@ -138,6 +142,32 @@ systems_info = pd.DataFrame({'Consoles': consoles,
 systems_info = systems_info.sort_values('Start')
 systems_info = systems_info.reset_index(inplace=False)
 systems_info = systems_info.drop('index', axis=1)
+
+
+
+# Create General categories Nintendo, Sony, Microsoft etc
+company = [] # initialize a list
+
+# List of platforms to define each company
+Nintendo = ['NES', 'SNES', 'N64', 'GC', 'Wii', 'WiiU', 'NS', 'GB', 'GBA', 'GBC', 'DS', '3DS']
+Microsoft = ['XB', 'X360', 'XOne']
+Sony = ['PS', 'PS2', 'PS3', 'PS4', 'PSP', 'PSV']
+Sega = ['GEN', 'DC', 'GG']
+
+
+# Loop over platforms to fill company list up and add it to games df
+for i in games.Platform:
+    if i in Sony:
+        company.append('Sony')
+    elif i in Nintendo:
+        company.append('Nintendo')
+    elif i in Microsoft:
+        company.append('Microsoft')
+    else:
+        company.append('Sega')
+
+games['Company'] = company
+
 
 
 
@@ -192,6 +222,10 @@ bad_DC = games.loc[((games['Release_Date'].dt.year < begin[23]) | (games['Releas
                       & (games['Platform'] == consoles[23])]
 bad_DC.drop(24721, inplace=True) # drop value that actually was released outside of release date so not removed below
 
+# Fix the two missing values for developers
+games[games['Developer'].isnull()]
+games.loc[[10489], 'Developer'] = 'Ubisoft'
+games.loc[[31225], 'Developer'] = 'Unknown'
 
 # Drop games with no info and bad dates (assume never released) 246 games
 games = games.drop(bad_NES.index.values)
@@ -211,14 +245,66 @@ games = games.drop(bad_X360.index.values)
 games = games.drop(bad_GEN.index.values)
 games = games.drop(bad_DC.index.values)
 
+# Drop all games missing global sales values pre 2018 (not games to predict)
+todrop = games[games['Global_Sales'].isnull() & (games['Release_Date'].dt.year < 2018)]
+games = games.drop(todrop.index)
+
+
+# Clean up missing dates
+games.Release_Year = games.Release_Date.dt.year
+games.Release_Month = games.Release_Date.dt.month
+games.Release_Day = games.Release_Date.dt.day
+
 
 # Check on number of missing values
 games.isnull().sum()
 
 
+# Assign a numeric value for the order of games' release to simulate time progression
+games = games.sort_values(['Release_Date']) #.reset_index(drop=True)
+games['Order'] = list(range(len(games)))
+games = games.sort_index()
 
 
 
+
+a = games
+
+
+
+# Quick simple hypothesis test:
+# It appears like Nintendo sells better, is that true?
+
+# H0: Nintendo based mean game sales is the same as Sony based mean game sales (μn = μs)
+# Ha: Nintendo based mean game sales is  not the same as Sony based mean game sale (μn != μs)
+# alpha = 0.05
+
+nintendo = games[games['Company'] == 'Nintendo']
+nintendo = nintendo.dropna(subset=['Global_Sales'])
+sony = games[games['Company'] == 'Sony']
+sony = sony.dropna(subset=['Global_Sales'])
+
+
+# Histogram
+sns.distplot(nintendo.Global_Sales, bins=3000)
+plt.xlim(0, 2)
+plt.xlabel('Global Sales')
+plt.ylabel('Count')
+plt.title('Nintendo Sales')
+plt.legend((nintendo[0], sony[0]), ('Nintendo', 'Sony'))
+plt.show()
+
+sns.distplot(sony.Global_Sales, bins=1000)
+plt.xlim(0, 2)
+plt.xlabel('Global Sales')
+plt.ylabel('Count')
+plt.title('Sony Sales')
+plt.show()
+
+hyp = statsmodels.stats.weightstats.ztest(nintendo.Global_Sales, sony.Global_Sales)
+print('t =', round(hyp[0], 3))
+print('p-value =', round(hyp[1], 3))
+print('p-value much greater than alpha, so we cannot reject the null hypothesis and Nintendo did not make significantly more sales')
 
 
 
@@ -236,7 +322,7 @@ gsby = sns.barplot(x='Global_Sales', y='Release_Date', data=by_year, orient='h',
 plt.xlabel('Sales in Thousands ($)')
 plt.ylabel('Year')
 plt.show()
-#1
+
 
 
 # number of games released each year
@@ -245,7 +331,7 @@ gpy = sns.countplot(y=games['Release_Date'].dt.year, data=games, color='blue').s
 plt.xlabel('Games')
 plt.ylabel('Year')
 plt.show()
-#2
+
 
 # histogram of game scores
 scores = games[np.isfinite(games['score'])] # 8k games
@@ -254,7 +340,6 @@ sns.set(style='ticks')
 plt.ylabel('Count')
 plt.xlabel('Score')
 plt.show()
-#3
 
 
 # Global Sales by Console
@@ -269,7 +354,7 @@ plt.ylabel('Sales in Thousands ($)')
 sns.set(style='whitegrid', font_scale=0.75)
 plt.title('Global Sales by Platform')
 plt.show()
-#4
+
 
 
 # Average score by genre
@@ -399,7 +484,7 @@ abc = abc.pivot('Release_Date', 'Platform', 'Global_Sales')
 abc = abc[['NES', 'GEN', 'GB', 'SNES', 'GG', 'PS', 'N64', 'GBC', 'DC', 'PS2', 'GC', 'XB',
                                                    'GBA', 'DS', 'PSP', 'X360', 'Wii', 'PS3', '3DS', 'PSV', 'WiiU',
                                                    'XOne', 'PS4', 'NS']]
-abc = np.round(abc, decimals=0) # remove decimals to avoid scientific notation
+abc = np.round(abc, decimals=0)  # remove decimals to avoid scientific notation
 sns.heatmap(abc, annot=True, cmap='YlGnBu', linewidths=0.4, fmt='g')
 plt.title('Global Sales by Platforms')
 plt.yticks(rotation=0)
@@ -438,24 +523,117 @@ plt.show()
 
 
 
-pandas.get_dummies
+
+
+
+
+
+
+
+
 
 
 
 # Prepare model
 
-# Cleaning up df
+# drop unnecessary columns for predicting
+clean_df = games.drop(['title', 'platform', 'Day', 'NA_Sales', 'PAL_Sales', 'JP_Sales', 'Other_Sales', 'score', 'editors_choice', 'Year'], axis=1)
 
-games = games.drop(['title', 'platform', 'Day'], axis=1)
-
-# drop
-test = games.drop(['Name'], axis=1)
-
-# create test/train sets for prediction
-gamestest = test[(test['Release_Date'].dt.year < 2018)]
-gamestrain = test[(test['Release_Date'].dt.year > 2017)]
+# clean up developer and reduce any company with fewer than specified counts re-assigned as: Indie
+top_devs = clean_df.Developer.value_counts()
+top_devs = top_devs.reset_index(drop=False)
+top_devs.columns = ['Developer', 'Games']
+indie_devs = top_devs[top_devs['Games'] < 10]  # Reduce list to only devs with < 10 games
+indie_devs = list(indie_devs.Developer)  # (list of 3825 names changing to Indie)
 
 
+clean_df.Developer = clean_df.Developer.cat.add_categories(['Indie'])  # Add new category for dev column
+clean_df.loc[clean_df['Developer'].isin(indie_devs), "Developer"] = 'Indie'  # Change appropriate entries
+
+
+
+
+# Publisher
+top_pubs = clean_df.Publisher.value_counts()
+top_pubs = top_pubs.reset_index(drop=False)
+top_pubs.columns = ['Publisher', 'Games']
+indie_pubs = top_pubs[top_pubs['Games'] < 10]
+indie_pubs = list(indie_pubs.Publisher)
+
+clean_df.Publisher = clean_df.Publisher.cat.add_categories(['Indie'])
+clean_df.loc[clean_df['Publisher'].isin(indie_pubs), "Developer"] = 'Indie'
+
+# Tidy up categorical data, removing unused categories
+clean_df.Developer.cat.remove_unused_categories(inplace=True)
+clean_df.Publisher.cat.remove_unused_categories(inplace=True)
+
+# Create dummy variables
+dummy = pd.get_dummies(clean_df, columns=['Platform', 'Genre', 'Publisher', 'Developer', 'Month', 'Company'])
+
+
+
+
+# create test/train sets for prediction 2018+
+gamestest = dummy[(dummy['Release_Date'].dt.year >= 2018)]   # 1249
+gamestrain = dummy[(dummy['Release_Date'].dt.year <= 2017)]  # 17273
+
+# create list of names for games in test/train set
+testnames = gamestest.Name  # 1249
+trainnames = gamestrain.Name  # 17273
+
+# Create x and y datasets
+# pre 2018
+gamestrainx = gamestrain.drop(['Global_Sales', 'Release_Date', 'Name'], axis=1)
+gamestrainy = gamestrain[['Global_Sales']]
+
+# 2018+
+gamestestx = gamestest.drop(['Global_Sales', 'Release_Date', 'Name'], axis=1)
+gamestesty = gamestest[['Global_Sales']]
+
+
+
+
+
+# Simple Linear Regression:
 reg_all = LinearRegression()
-reg_all.fit(gamestest, gamestrain)
-reg_all.predict(gamestest)
+reg_all.fit(gamestrainx, gamestrainy)
+games_y_pred = reg_all.predict(gamestrainx)
+
+print('Simple Linear Regression')
+print('Mean Squared Error:', mean_squared_error(gamestrainy, games_y_pred))
+print('Variance (1 is perfect prediction):', r2_score(gamestrainy, games_y_pred))
+
+
+
+
+
+
+
+
+
+
+
+
+
+def list_top_games(y_pred):
+    test1 = pd.DataFrame(np.concatenate(y_pred))
+    test2 = pd.concat((trainnames, gamestrainy), axis=1)
+    compare = pd.concat((test2, test1), axis=1)
+    return compare
+
+
+compare = list_top_games(games_y_pred)
+compare.columns = ['Name', 'Global_Sales', 'Pred_Sales']
+compare['MSE'] = (compare.Global_Sales - compare.Pred_Sales)**2
+
+
+
+
+
+
+
+# ~~~~~~~~~~~Questions~~~~~~~~~~~~
+# what to predict: Sales of a game, time series prediction
+
+# linear regression, tree based, polynomials on time variables (year * action in genre),
+# remove game name for modelleing (lasso, gbm, random forrest)
